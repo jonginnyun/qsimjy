@@ -91,6 +91,33 @@ class MicroMagnet():
         self.magnet_x_list = [np.min(_list_x), np.max(_list_x)]
         self.magnet_y_list = [np.min(_list_y), np.max(_list_y)]
         
+    def FetchFromCAD(self, 
+                     QD: 'Quantum_dot_device',  
+                     field_x_list: [float, float], 
+                     field_y_list: [float, float],
+                     gran_list: [int, int],
+                     x_list = None,
+                     y_list = None,
+                     layername = None):
+        self.field_x = np.linspace(x_list[0], x_list[1], gran_list[0])
+        self.field_y = np.linspace(y_list[0], y_list[1], gran_list[1])
+        self.field_trace = np.zeros((len(self.field_x), len(self.field_y), 3))  # Field array to store B value at each position
+        
+        if layername != None:
+            for i in QD.gate_set.gate_list:
+                if (i.name == layername):
+                    self.magnets.append(i)
+        else:
+            for i in QD.gate_set.gate_list:
+                if (i.name == self.magnet_layer_name):
+                    self.magnets.append(i)
+        _list_x = [i.point_list_x for i in self.magnets]
+        _list_y = [i.point_list_y for i in self.magnets]
+        if x_list != None:
+            self.magnet_x_list = x_list
+        if y_list != None:
+            self.magnet_y_list = y_list
+
     def LaunchOOMMFC(self, n, n_cpu = 4):
         def _Ms_value(pos):
             x, y, z = pos
@@ -186,3 +213,90 @@ class MicroMagnet():
         end = time.time()
         self.field_trace[:, :, component] = answer_trace
         print('Total time elapsed:', datetime.timedelta(seconds=end - start))
+        
+    def MeshCoordFetch(self, 
+                       x_list : [float, float], #[x_min, x_max] for MagnetMesh, unit: um
+                       y_list : [float, float], #[y_min, y_max] for MagnetMesh, unit: um
+                       gran_list : [int, int] #Granularity of the mesh whose values to be generated
+                       ):
+        _mesh_to_return = np.zeros(gran_list)
+        _mesh_x_list = np.linspace(*x_list, gran_list[0]+1)
+        _mesh_y_list = np.linspace(*y_list, gran_list[1]+1)
+        for i in range(gran_list[0]*gran_list[1]):
+            ix = i // gran_list[1]
+            iy = i % gran_list[1]
+            for j in self.magnets:
+                if j.gate_polygon.contains(Point(_mesh_x_list[ix]*0.5+_mesh_x_list[ix+1]*0.5,
+                                                 _mesh_y_list[iy]*0.5+_mesh_y_list[iy+1]*0.5)):
+                    _mesh_to_return[ix, iy] = 1
+                    break
+        return _mesh_to_return
+        
+
+
+class MeshedMicroMagnet(MicroMagnet): #Micromagnet Class to Handle the Mesh
+    def __init__(self, 
+                 magnetmesh, #MagnetMesh
+                 thickness : float, #Thickness of a magnet
+                 saturation_magnetization : float, #A/m, saturation magnetization of the material comprising a micromagnet 
+                 magnetization_direction : (float, float, float), #direction of the saturated magnetization 
+                 micromagnet_simulation_setting = [0, 0, 0, 0, 0], #[Zeeman, Uniaxial, Exchange, DM energy, Cubic energy
+                 external_field : float = None, # mT
+                 external_field_direction : (float, float, float) = None, #The unit vector of the external field in the order of (x, y, z)
+                 magnetocrystalline_anisotropy_constant = None, #J/m^3, magnetocrystalline anisotropy constant
+                 uniaxial_axis: (float, float, float) = None, #Diection of the uniaxial axis
+                 exchange_constant : float = None, #exchange Constant, J/m
+                 ):
+        super().__init__(thickness,
+                         saturation_magnetization,
+                         magnetization_direction,
+                         micromagnet_simulation_setting,
+                         external_field,
+                         external_field_direction,
+                         magnetocrystalline_anisotropy_constant,
+                         uniaxial_axis,
+                         exchange_constant)
+        self.magnet_mesh = magnetmesh
+
+    def SystemGen(self, z_gran, n_cpu = 4):
+        _Ms_array = np.repeat(self.magnet_mesh.mesh_coord[:, :, None], z_gran , axis=2)
+        _p1 = (x_list[0]*1e-6, y_list[0]*1e-6, 0) 
+        _p2 = (x_list[1]*1e-6, y_list[1]*1e-6, self.thickness)
+        self.region = df.Region(p1=_p1, p2=_p2)
+        self.Mesh = df.Mesh(region = self.region, n = (*np.shape(self.magnet_mesh.mesh_coord), z_gran))
+        print('Ubermag meshes generated. Configuring systems ...')
+        self.system = mm.System(name = "micromagnet")
+        self.system.energy = mm.Demag()
+        if self._setting["Zeeman"] == 1 : 
+            self.system.energy += mm.Zeeman(H=self.external_field)
+        if self._setting["Uniaxial"] == 1:
+            self.system.energy += mm.UniaxialAnisotropy(K=self.magnetocrystalline_anisotropy_constant,
+                                                        u=self.uniaxial_axis)
+        if self._setting["Exchange"] == 1: 
+            self.system.energy += mm.Exchange(A = self.exchange_constant)
+        self.system.m=df.Field(self.Mesh, nvdim = 3, value = (0, 1, 0), norm = _Ms_array*self.saturation_magnetization, valid = "norm")
+        md = oc.MinDriver()  # create energy minimisation driver
+        print('System configured.')
+        md.drive(self.system, n_threads = n_cpu)
+    
+    def CalcStray(self,
+                  x_list: [float, float], #list of x coordinates within which stray field is calculated, [min, max]
+                  y_list: [float, float], #list of y coordinates within which stray field is calculated, [min, max]
+                  gran_list: [int, int], #granularity for x_list and y_list
+                  quantum_dot_position_z,
+                  component = 1, #component to calc (0 = x, 1 = y, 2 = z)
+                  n_cpu = 4): #of threads to use
+        self.field_x = np.linspace(x_list[0], x_list[1], gran_list[0])
+        self.field_y = np.linspace(y_list[0], y_list[1], gran_list[1])
+        self.field_trace = np.zeros((len(self.field_x), len(self.field_y), 3)) 
+        super().CalcStray(quantum_dot_position_z, component, n_cpu)
+    
+class MagnetMesh():
+    def __init__(self,
+                 mesh_coord, #Mesh status matrix. Either 0 or 1 and 2d numpy array (n_x, n_y)
+                 x_list : [float, float], #[x_min, x_max] for MagnetMesh, unit: um
+                 y_list : [float, float], #[y_min, y_max] for MagnetMesh, unit: um
+                 ):
+        self.mesh_x_list = np.linspace(*x_list, np.shape(mesh_coord)[0]+1)
+        self.mesh_y_list = np.linspace(*y_list, np.shape(mesh_coord)[1]+1)
+        self.mesh_coord = mesh_coord
