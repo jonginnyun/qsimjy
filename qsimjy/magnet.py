@@ -260,8 +260,8 @@ class MeshedMicroMagnet(MicroMagnet): #Micromagnet Class to Handle the Mesh
 
     def SystemGen(self, z_gran, n_cpu = 4):
         _Ms_array = np.repeat(self.magnet_mesh.mesh_coord[:, :, None], z_gran , axis=2)
-        _p1 = (x_list[0]*1e-6, y_list[0]*1e-6, 0) 
-        _p2 = (x_list[1]*1e-6, y_list[1]*1e-6, self.thickness)
+        _p1 = (self.magnet_mesh.mesh_x_boundary[0]*1e-6, self.magnet_mesh.mesh_y_boundary[0]*1e-6, 0) 
+        _p2 = (self.magnet_mesh.mesh_x_boundary[1]*1e-6, self.magnet_mesh.mesh_y_boundary[1]*1e-6, self.thickness)
         self.region = df.Region(p1=_p1, p2=_p2)
         self.Mesh = df.Mesh(region = self.region, n = (*np.shape(self.magnet_mesh.mesh_coord), z_gran))
         print('Ubermag meshes generated. Configuring systems ...')
@@ -297,6 +297,8 @@ class MagnetMesh():
                  x_list : [float, float], #[x_min, x_max] for MagnetMesh, unit: um
                  y_list : [float, float], #[y_min, y_max] for MagnetMesh, unit: um
                  ):
+        self.mesh_x_boundary = x_list
+        self.mesh_y_boundary = y_list
         self.mesh_x_list = np.linspace(*x_list, np.shape(mesh_coord)[0]+1)
         self.mesh_y_list = np.linspace(*y_list, np.shape(mesh_coord)[1]+1)
         self.mesh_coord = mesh_coord
