@@ -288,7 +288,8 @@ class MeshedMicroMagnet(MicroMagnet): #Micromagnet Class to Handle the Mesh
                   n_cpu = 4): #of threads to use
         self.field_x = np.linspace(x_list[0], x_list[1], gran_list[0])
         self.field_y = np.linspace(y_list[0], y_list[1], gran_list[1])
-        self.field_trace = np.zeros((len(self.field_x), len(self.field_y), 3)) 
+        if self.field_trace is None:
+            self.field_trace = np.zeros((len(self.field_x), len(self.field_y), 3)) 
         super().CalcStray(quantum_dot_position_z, component, n_cpu)
     
 class MagnetMesh():
