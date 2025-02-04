@@ -24,7 +24,7 @@ class CMakeBuildExt(build_ext):
 
 setup(
     name="qsimjy",
-    version="0.1",
+    version="0.1.1",
     description="A Python package that approximately calculates the electric and magnetic field calculated by a semiconductor quantum dot device with a cobalt micromagnet.",
     author="Jonginn Yun",
     author_email="alyuuv@snu.ac.kr/alyuuv@stanford.edu",

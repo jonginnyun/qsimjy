@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qsimjy"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Python package that calculates electric and magnetic fields of a semiconductor quantum dot device with a cobalt micromagnet."
 authors = [
     { name = "Jonginn Yun", email = "alyuuv@snu.ac.kr" },
