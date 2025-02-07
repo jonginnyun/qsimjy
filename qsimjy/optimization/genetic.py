@@ -52,11 +52,38 @@ def RandomMeshGen(mesh_size):
 
     
 def Mutate(chrom,
-           mutation_rate = 0.001): #default mutation rate is 0.001
-    for i in range(np.shape(chrom)[0]):
-        for j in range(np.shape(chrom)[1]):
-            if random.random() < mutation_rate:
-                chrom[i,j] = 1-chrom[i,j]
+           mutation_rate = 0.001,#default mutation rate is 0.00: 1
+           mut_constraint = None):
+    """
+    Mutates a chromosome. `mut_constaint` chooses one fo the following mutation consraints:
+    1. None: completely random mutation
+    2. 'adj' = mutation is allowed if the adjacent cell has the same value to mutate
+    """
+    if mut_constraint == None:
+        for i in range(np.shape(chrom)[0]):
+            for j in range(np.shape(chrom)[1]):
+                if random.random() < mutation_rate:
+                    chrom[i,j] = 1-chrom[i,j]
+        return 0
+    elif mut_constraint == 'adj':
+        _n_x,_n_y =  np.shape(chrom)[0],np.shape(chrom)[1]
+        _mutated = copy.deepcopy(chrom)
+        _mutation_mask = np.random.rand(_n_x, _n_y) < mutation_rate #Boolean mask of a cell to mutate
+        _padded = np.pad(_mutated, pad_width = 1, mode = 'reflect')
+        _neighbor_ones = (_padded[:-2, 1:-1] +  
+                          _padded[2:, 1:-1] +   
+                          _padded[1:-1, :-2] +  
+                          _padded[1:-1, 2:]) > 0
+        _neighbor_zeros = ((_padded[:-2, 1:-1] == 0).astype(int) + 
+                           (_padded[2:, 1:-1] == 0).astype(int) +  
+                           (_padded[1:-1, :-2] == 0).astype(int) +  
+                           (_padded[1:-1, 2:] == 0).astype(int)) > 0
+        _can_mutate_01 = (_mutated == 0) & _neighbor_ones #Boolean mask for the constraint 0 to 1
+        _can_mutate_10 = (_mutated == 1) & _neighbor_zeros #Boolean mask for the constraint 1 to 0
+        _mutated[(_mutation_mask & _can_mutate_01)] = 1  # Mutation: 0 → 1 
+        _mutated[(_mutation_mask & _can_mutate_10)] = 0  # Mutation: 1 → 0
+        return _mutated
+
 
 def InitChromGen(chrom_params: ChromParams,
                  population_size : int,
@@ -70,7 +97,9 @@ def InitChromGen(chrom_params: ChromParams,
     """
     if is_random != True:
         _to_return = copy.deepcopy(init_input.mesh_coord)
-        Mutate(_to_return, mutation_rate)
+        Mutate(_to_return, 
+               mutation_rate, 
+               'adj')
         return [magnet.MagnetMesh(_to_return,
                                   chrom_params.mesh_x_list,
                                   chrom_params.mesh_y_list) for _ in range(population_size)]
@@ -178,6 +207,7 @@ def RunGA(population_size : int,
           exp_params: ExpParams,
           crossover_rate : float = 0.8,
           mutation_rate : float = 0.001,
+          mutation_constraint = None,
           init_is_random = True,
           init_input: magnet.MagnetMesh = None,
           input_mutation_rate = 0.001):
@@ -245,8 +275,8 @@ def RunGA(population_size : int,
             c1, c2 = UniformCrossOver(p1, p2, crossover_rate)
             
             # (c) mutation
-            Mutate(c1, mutation_rate)
-            Mutate(c2, mutation_rate)
+            Mutate(c1, mutation_rate, mutation_constraint)
+            Mutate(c2, mutation_rate, mutation_constraint)
             
             new_population.append(magnet.MagnetMesh(c1,
                                   chrom_params.mesh_x_list,
