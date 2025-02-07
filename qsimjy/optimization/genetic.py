@@ -82,7 +82,7 @@ def Mutate(chrom,
         _can_mutate_10 = (_mutated == 1) & _neighbor_zeros #Boolean mask for the constraint 1 to 0
         _mutated[(_mutation_mask & _can_mutate_01)] = 1  # Mutation: 0 → 1 
         _mutated[(_mutation_mask & _can_mutate_10)] = 0  # Mutation: 1 → 0
-        chrom = _mutated
+        chrom[:] = _mutated
 
 
 def InitChromGen(chrom_params: ChromParams,
