@@ -14,8 +14,35 @@ conversionfactor_of_mT_into_Am = 0.79577471545947673925*1e3 #ref;https://maurerm
 mu_0 = 1.25637e-6  # vacuum permeability [N * A^-2]
 prop_const = mu_0 / np.pi / 4  # proportionality constant for magnetic field
 
-
-
+class MmSimParams():
+    """
+    A class that generates an object containing the parameters for the class MicroMagnet.
+    Added soleley for the convenience.
+    Dependency: Micromagnet, MeshedMicroMagnet
+    """
+    def __init__(self, 
+                 thickness : float = None, #Thickness of a magnet
+                 saturation_magnetization : float = None, #A/m, saturation magnetization of the material comprising a micromagnet 
+                 magnetization_direction : (float, float, float) = None, #direction of the saturated magnetization 
+                 micromagnet_simulation_setting = [0, 0, 0, 0, 0], #[Zeeman, Uniaxial, Exchange, DM energy, Cubic energy
+                 external_field : float = None, # mT
+                 external_field_direction : (float, float, float) = None, #The unit vector of the external field in the order of (x, y, z)
+                 magnetocrystalline_anisotropy_constant = None, #J/m^3, magnetocrystalline anisotropy constant
+                 uniaxial_axis: (float, float, float) = None, #Diection of the uniaxial axis
+                 exchange_constant : float = None, #exchange Constant, J/m
+                 layername : str = None):
+        self.simulation_parameter = {
+            'thickness' : thickness,
+            'saturation_magnetization' : saturation_magnetization,
+            'micromagnet_simulation_setting': micromagnet_simulation_setting,
+            'magnetization_direction': magnetization_direction,
+            'external_field': external_field,
+            'external_field_direction': external_field_direction,
+            'magnetocrystalline_anisotropy_constant': magnetocrystalline_anisotropy_constant,
+            'uniaxial_axis': uniaxial_axis,
+            'exchange_constant': exchange_constant,
+            'layername': layername}
+        
 class MicroMagnet():
     def __init__(self, 
                  thickness : float, #Thickness of a magnet
@@ -246,7 +273,7 @@ class MeshedMicroMagnet(MicroMagnet): #Micromagnet Class to Handle the Mesh
                  magnetocrystalline_anisotropy_constant = None, #J/m^3, magnetocrystalline anisotropy constant
                  uniaxial_axis: (float, float, float) = None, #Diection of the uniaxial axis
                  exchange_constant : float = None, #exchange Constant, J/m
-                 ):
+                 layername = None):
         super().__init__(thickness,
                          saturation_magnetization,
                          magnetization_direction,

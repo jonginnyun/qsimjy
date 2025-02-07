@@ -1,4 +1,4 @@
-from setuptools import setup, Extension
+from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 import os
 import sys
@@ -28,7 +28,7 @@ setup(
     description="A Python package that approximately calculates the electric and magnetic field calculated by a semiconductor quantum dot device with a cobalt micromagnet.",
     author="Jonginn Yun",
     author_email="alyuuv@snu.ac.kr/alyuuv@stanford.edu",
-    packages=["qsimjy"],
+    packages=find_packages(),
     ext_modules=[
         Extension("_cxx_magcalc", ["src/c_magcalc_pybind.cpp"]),
         Extension("_cxx_potcalc", ["src/c_potcalc_pybind.cpp"]),
