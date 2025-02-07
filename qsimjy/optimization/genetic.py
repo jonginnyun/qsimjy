@@ -50,13 +50,30 @@ def RandomMeshGen(mesh_size):
     """
     return np.random.randint(0, 2, size = mesh_size) 
 
+    
+def Mutate(chrom,
+           mutation_rate = 0.001): #default mutation rate is 0.001
+    for i in range(np.shape(chrom)[0]):
+        for j in range(np.shape(chrom)[1]):
+            if random.random() < mutation_rate:
+                chrom[i,j] = 1-chrom[i,j]
+
 def InitChromGen(chrom_params: ChromParams,
-                 population_size : int):
+                 population_size : int,
+                 is_random = True,
+                 init_input: magnet.MagnetMesh = None,
+                 mutation_rate = 0.001):
     """
     Generates a list of randomly prepared initial chromosomes, which is a MagnetMesh obj.
     `mesh_size` indicates the size of a mesh for each chromosome.
     `x_list` and `y_list` set the boundary for the mesh. 
     """
+    if is_random != True:
+        _to_return = copy.deepcopy(init_input.mesh_coord)
+        Mutate(_to_return, mutation_rate)
+        return [magnet.MagnetMesh(_to_return,
+                                  chrom_params.mesh_x_list,
+                                  chrom_params.mesh_y_list) for _ in range(population_size)]
     return [magnet.MagnetMesh(RandomMeshGen(chrom_params.mesh_size),
                               chrom_params.mesh_x_list,
                               chrom_params.mesh_y_list) for _ in range(population_size)]
@@ -153,13 +170,6 @@ def UniformCrossOver(parent1,
                 child2[i,j] = temp
                 
     return child1, child2
-    
-def Mutate(chrom,
-           mutation_rate = 0.001): #default mutation rate is 0.001
-    for i in range(np.shape(chrom)[0]):
-        for j in range(np.shape(chrom)[1]):
-            if random.random() < mutation_rate:
-                chrom[i,j] = 1-chrom[i,j]
 
 def RunGA(population_size : int,
           number_of_generations : float,
@@ -167,12 +177,22 @@ def RunGA(population_size : int,
           field_params: StrayCalcParams,
           exp_params: ExpParams,
           crossover_rate : float = 0.8,
-          mutation_rate : float = 0.001 
-          ):
+          mutation_rate : float = 0.001,
+          init_is_random = True,
+          init_input: magnet.MagnetMesh = None,
+          input_mutation_rate = 0.001):
     # 1. Create initial population
-    population = InitChromGen(chrom_params,
-                              population_size)
-    
+    if init_is_random == True:
+        population = InitChromGen(chrom_params,
+                                  population_size)
+    else:
+        population = InitChromGen(chrom_params,
+                                  population_size,
+                                  init_is_random,
+                                  init_input,
+                                  input_mutation_rate
+                                  )
+        
     # Track best solution over all generations
     best_overall_chrom = None
     best_overall_fit = -np.inf
