@@ -36,10 +36,15 @@ setup(
     cmdclass={"build_ext": CMakeBuildExt},
     python_requires=">=3.7",
     install_requires=[
-        "numpy",  
+        "numpy",
         "ezdxf",
         "shapely",
-        "ubermag"
+        "ubermag",
+        "matplotlib",
+        "discretisedfield",
+        "scipy",
+        "multiprocess",
+        "scikit-image"
     ],
     classifiers=[
         "Programming Language :: Python :: 3",

@@ -27,5 +27,10 @@ dependencies = [
     "numpy",
     "ezdxf",
     "shapely",
-    "ubermag"
+    "ubermag",
+    "matplotlib",
+    "discretisedfield",
+    "scipy",
+    "multiprocess",
+    "scikit-image"
 ]
