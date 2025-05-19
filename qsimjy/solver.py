@@ -14,15 +14,15 @@ def potential_generator(
     """
     Interpolate the potential trace onto the solution grid.
 
-    Parameters:
-    - potential_trace (2D array): Potential values on the original grid.
-    - x_list_to_solve (1D array): x-coordinates of the solution grid.
-    - y_list_to_solve (1D array): y-coordinates of the solution grid.
-    - x_list_potential (1D array): x-coordinates of the potential grid.
-    - y_list_potential (1D array): y-coordinates of the potential grid.
+    Args:
+        potential_trace (2D array): Potential values on the original grid.
+        x_list_to_solve (1D array): x-coordinates of the solution grid.
+        y_list_to_solve (1D array): y-coordinates of the solution grid.
+        x_list_potential (1D array): x-coordinates of the potential grid.
+        y_list_potential (1D array): y-coordinates of the potential grid.
 
     Returns:
-    - V (2D array): Interpolated potential on the solution grid.
+        V (2D array): Interpolated potential on the solution grid.
     """
     # Convert potential to eV scale (if necessary)
     v_values = potential_trace / (11 * 4 * np.pi)  # Adjust conversion factor as needed
@@ -42,22 +42,15 @@ class Schrodinger2D:
     """
     Class to solve the 2D Schrödinger equation with a given potential.
 
-    Attributes:
-    - x_list_solve (1D array): x-coordinates of the solution grid.
-    - y_list_solve (1D array): y-coordinates of the solution grid.
-    - potential (2D array): Potential on the solution grid.
-    - eigenvalues (1D array): Eigenvalues from solving the Schrödinger equation.
-    - eigenstates (2D array): Corresponding eigenstates.
+    Args:
+        x_list_solve (1D array): x-coordinates of the solution grid.
+        y_list_solve (1D array): y-coordinates of the solution grid.
+        potential (2D array): Potential on the solution grid.
+        eigenvalues (1D array): Eigenvalues from solving the Schrödinger equation.
+        eigenstates (2D array): Corresponding eigenstates.
     """
 
     def __init__(self, x_list_solve, y_list_solve):
-        """
-        Initialize the solver with the solution grid.
-
-        Parameters:
-        - x_list_solve (1D array): x-coordinates of the solution grid.
-        - y_list_solve (1D array): y-coordinates of the solution grid.
-        """
         print("Assuming Dirichlet boundary conditions with boundary value zero.")
         if len(x_list_solve) != len(y_list_solve):
             print(
@@ -77,10 +70,10 @@ class Schrodinger2D:
         """
         Set the potential on the solution grid by interpolating the given potential trace.
 
-        Parameters:
-        - x_list_potential (1D array): x-coordinates of the potential grid.
-        - y_list_potential (1D array): y-coordinates of the potential grid.
-        - potential_trace (2D array): Potential values on the potential grid.
+        Args:
+            x_list_potential (1D array): x-coordinates of the potential grid.
+            y_list_potential (1D array): y-coordinates of the potential grid.
+            potential_trace (2D array): Potential values on the potential grid.
         """
         # Convert potential to eV scale (if necessary)
         v_values = potential_trace / (11 * 4 * np.pi)  # Adjust conversion factor as needed
@@ -98,8 +91,8 @@ class Schrodinger2D:
         """
         Solve the 2D Schrödinger equation for the given number of states.
 
-        Parameters:
-        - number_of_states (int): Number of eigenstates to compute.
+        Args:
+            number_of_states (int): Number of eigenstates to compute.
         """
         Nx = len(self.x_list_solve)
         Ny = len(self.y_list_solve)
@@ -143,8 +136,8 @@ class Schrodinger2D:
         """
         Plot the probability density of the specified eigenstate overlaid with the potential.
 
-        Parameters:
-        - idx_to_plot (int): Index of the eigenstate to plot.
+        Args:
+            idx_to_plot (int): Index of the eigenstate to plot.
         """
         Nx = len(self.x_list_solve)
         Ny = len(self.y_list_solve)

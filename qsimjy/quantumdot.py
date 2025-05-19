@@ -12,7 +12,8 @@ from shapely.plotting import plot_polygon, plot_points
 from multiprocess import Pool
 
 """
-Functions related to handling CAD files. Only supports DXF extension.
+CAD gate parsing and electrostatic simulation utilities.
+Supports DXF file format and maps gate layers to physical potential contributions.
 """
 
 
@@ -21,12 +22,12 @@ def dxf_exporter(file_dir: str, offset=0.01):
     Import a DXF file and convert each LWPOLYLINE entity into a Gate_pattern object.
     Each Gate_pattern is added to a Gate_set.
 
-    Parameters:
-    - file_dir (str): Path to the DXF file.
-    - offset (float): Shape offset due to the finite resolution of the lithography equipment.
+    Args:
+        file_dir (str): Path to the DXF file.
+        offset (float): Shape offset due to the finite resolution of the lithography equipment.
 
     Returns:
-    - Gate_set: A set of Gate_pattern objects created from the DXF file.
+        Gate_set: A set of Gate_pattern objects created from the DXF file.
     """
     doc = ezdxf.readfile(file_dir)
     polygon_list = []
@@ -46,9 +47,9 @@ def gate_level_setter(gate_set, level_dict: dict) -> None:
     """
     Set the gate levels for each gate in the gate_set based on the level_dict.
 
-    Parameters:
-    - gate_set (Gate_set): The set of gates to update.
-    - level_dict (dict): A dictionary mapping gate names to levels.
+    Args:
+        gate_set (Gate_set): The set of gates to update.
+        level_dict (dict): A dictionary mapping gate names to levels.
     """
     for gate in gate_set.gate_list:
         if gate.name in level_dict:
@@ -59,12 +60,16 @@ def Green_Function_der(x, y, z, xp, yp, zp) -> float:
     """
     Calculate the derivative of the 2D Green's Function for a quantum dot well geometry.
 
-    Parameters:
-    - x, y, z (float): Coordinates where the potential is calculated.
-    - xp, yp, zp (float): Source coordinates.
+    Args:
+        x (float): x-coordinate of target.
+        y (float): y-coordinate of target.
+        z (float): z-coordinate of target.
+        xp (float): x-coordinate of source.
+        yp (float): y-coordinate of source.
+        zp (float): z-coordinate of source.
 
     Returns:
-    - float: The value of the derivative of the Green's function.
+        float: The value of the derivative of the Green's function.
     """
     dx = x - xp
     dy = y - yp
@@ -84,12 +89,12 @@ class Gate_pattern:
     or counter-clockwise along the demarcation of the gate geometry.
 
     Attributes:
-    - point_list_x (list): x-coordinates of the gate polygon vertices.
-    - point_list_y (list): y-coordinates of the gate polygon vertices.
-    - gate_level (int): Stacking sequence of the gate; lower value lies beneath higher ones.
-    - voltage (float): Voltage applied to the gate.
-    - gate_polygon (Polygon): Shapely polygon object representing the gate.
-    - name (str): Name of the gate.
+        point_list_x (list): x-coordinates of the gate polygon vertices.
+        point_list_y (list): y-coordinates of the gate polygon vertices.
+        gate_level (int): Stacking sequence of the gate; lower value lies beneath higher ones.
+        voltage (float): Voltage applied to the gate.
+        gate_polygon (Polygon): Shapely polygon object representing the gate.
+        name (str): Name of the gate.
     """
 
     _number_of_patterns = 0
@@ -104,6 +109,12 @@ class Gate_pattern:
         self.name = "default"
 
     def add_point(self, point_arrays):
+        """
+        Add points to the gate pattern.
+
+        Args:
+            point_arrays (list): List of (x, y) lists (or arrays) representing the vertices.
+        """
         if isinstance(point_arrays, (np.ndarray, list)):
             self.point_list_x.append(point_arrays[0])
             self.point_list_y.append(point_arrays[1])
@@ -118,9 +129,9 @@ class Gate_pattern:
         """
         Add multiple points to the gate pattern.
 
-        Parameters:
-        - point_tuple_list (list): List of (x, y) tuples representing the vertices.
-        - offset (float): Offset to apply to the polygon shape.
+        Args:
+            point_tuple_list (list): List of (x, y) tuples representing the vertices.
+            offset (float): Offset to apply to the polygon shape.
         """
         if not isinstance(point_tuple_list, (list, np.ndarray)):
             raise TypeError(
@@ -140,8 +151,8 @@ class Gate_pattern:
         """
         Set the gate polygon directly from a shapely Polygon object.
 
-        Parameters:
-        - polygon (Polygon): The shapely Polygon object to set.
+        Args:
+            polygon (Polygon): The shapely Polygon object to set.
         """
         self.point_list_x = list(polygon.exterior.coords.xy[0])
         self.point_list_y = list(polygon.exterior.coords.xy[1])
@@ -151,9 +162,9 @@ class Gate_pattern:
         """
         Plot the gate polygon.
 
-        Parameters:
-        - color: Color of the polygon.
-        - ax: Matplotlib Axes object to plot on.
+        Args:
+            color: Color of the polygon.
+            ax: Matplotlib Axes object to plot on.
         """
         plot_polygon(self.gate_polygon, color=color, add_points=False, ax=ax)
 
