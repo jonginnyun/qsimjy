@@ -51,8 +51,6 @@ void ParallelLookupCompute(py::array_t<double> answer_array_input,
     py::array_t<double> yp_list_input,
     py::array_t<double> args_list,
     int num_threads = 4) {
-    // GIL release
-    py::gil_scoped_release release;
 
 
     //buffer generation : args_list is a list [initial_oxide_thickness, oxide_thickness, qd_well_depth]
@@ -92,6 +90,8 @@ void ParallelLookupCompute(py::array_t<double> answer_array_input,
     std::vector<std::thread> threads;
     threads.reserve(num_threads);
     int current_idx1 = 0;
+    // Releasing Global Interpreter Lock. Released right before the multithreaded operation to avoid segfault.
+    py::gil_scoped_release release;
 
     for (int t = 0; t < num_threads; ++t) {
         int start_idx1 = current_idx1;

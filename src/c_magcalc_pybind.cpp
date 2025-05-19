@@ -87,8 +87,6 @@ void StrayFieldCalculator(
     int calculation_idx,
     int num_threads = 4
 ){
-    // Releasing Global Interpreter Lock
-    py::gil_scoped_release release;
     // Generating a thread pool
     std::vector<std::thread> threads;
     int num_threads_max = std::thread::hardware_concurrency();
@@ -133,6 +131,9 @@ void StrayFieldCalculator(
     int current_idx = 0;
     //Switching the thread allocation upon the value of calculation index.
     //0: x component, 1: y component, 2: z component
+
+    // Releasing Global Interpreter Lock. Released right before the multithreaded operation to avoid segfault.
+    py::gil_scoped_release release;
     for (int t = 0; t < num_threads; ++t){
         int start_idx = current_idx;
         int end_idx = current_idx + idx_per_thread;

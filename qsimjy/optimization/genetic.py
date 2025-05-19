@@ -53,6 +53,12 @@ class ExpParams():
 def RandomMeshGen(mesh_size): 
     """
     Creates a random binary mesh with the dimension of `mesh_size`.
+    
+    Args:
+        mesh_size (tuple): Size of the mesh (rows, colums).
+    
+    Returns: 
+        np.ndarray: A binary (0 or 1) 2D array representing the mesh.
     """
     return np.random.randint(0, 2, size = mesh_size) 
 
@@ -61,9 +67,17 @@ def Mutate(chrom,
            mutation_rate = 0.001,#default mutation rate is 0.00: 1
            mut_constraint = None):
     """
-    Mutates a chromosome. `mut_constaint` chooses one fo the following mutation consraints:
-    1. None: completely random mutation
-    2. 'adj' = mutation is allowed if the adjacent cell has the same value to mutate
+    Mutates a chromosome (2D binary array). 
+    
+    Args:
+        chrom (np.ndarray): The binary mesh to mutate.
+        mutation_rate (float): Probability of flipping a cell.
+        mut_constraint (str, optional): Mutation constraint. Options:
+            - None: No constraint; mutate randomly
+            - 'adj': Allow mutation only if adjacent cell supports it (has the same value to mutate).
+            
+    Returns:
+        None. Mutates in place.
     """
     if mut_constraint == None:
         for i in range(np.shape(chrom)[0]):
@@ -101,9 +115,17 @@ def InitChromGen(chrom_params: ChromParams,
                  init_input: magnet.MagnetMesh = None,
                  mutation_rate = 0.001):
     """
-    Generates a list of randomly prepared initial chromosomes, which is a MagnetMesh obj.
-    `mesh_size` indicates the size of a mesh for each chromosome.
-    `x_list` and `y_list` set the boundary for the mesh. 
+    Generates an initial population of chromosomes.
+    
+    Args:
+        chrom_params (ChromParams): Parameters for mesh and boundary.
+        population_size (int): Number of chromosomes to generate for an initial population.
+        is_random (bool): Whether to generate randomly (True) or use provided input (False).
+        init_input (MagnetMesh, optional): Input mesh to mutate if not random.
+        mutation_rate (float): Mutation rate if init_input is used.
+    
+    Returns:
+        list: List of MagnetMesh objects.
     """
     if is_random != True:
         _to_return = copy.deepcopy(init_input.mesh_coord)
@@ -119,6 +141,16 @@ def InitChromGen(chrom_params: ChromParams,
 
 def IdxFind(arr, 
             val):
+    """
+    Find the index in `arr` where the value is closest to `val`.
+    
+    Args:
+        arr (np.ndarray): 1D array to search.
+        val (float): Target value.
+    
+    Returns:
+        int: Index of the closest value.
+    """
     return np.argmin(np.abs(arr - val))
 
 def FitEval(chromosome : list, 
@@ -126,10 +158,20 @@ def FitEval(chromosome : list,
             field_params: StrayCalcParams,
             exp_params: ExpParams):
     """
-    For an individual chromosome with the specificed `mesh_size`,
-    1. Creates the MagnetMesh and the concomitant Meshed Micromagnet object
-    2. Compute the stray field
-    3. Compute the Quality factor Q
+    For an individual chromosome with the specificed `mesh_size`, evaluates the fitness by:
+        1. Creates the MagnetMesh and the concomitant Meshed Micromagnet object
+        2. Compute the stray field using MuMax3 and a C++ backend.
+        3. Compute the Quality factor Q over specific dot locations.
+    
+    Args:
+        chromosome (np.ndarray): Binary mesh representation of a chromosome.
+        chrom_params (ChromParams): Mesh/grid size and MuMax3 configuration.
+        field_params (StrayCalcParams): Field calculation grid and depth.
+        exp_params (ExpParams): Quantum dot positions and noise model
+        
+    Returns:
+        float: The computed fitness (total Q value). Returns a large negative value if simulation fails
+        
     """
     chrom = magnet.MeshedMicroMagnet(chromosome,
                                      **chrom_params.MmSimParams.simulation_parameter)
@@ -185,6 +227,18 @@ def FitEval(chromosome : list,
 def TournamentSelection(population :list[magnet.MagnetMesh], #a population, list of a chromosome
                         fitnesses : list, #a list of a fitness, in the same order with the population
                         k = 3): #tournament size, default is 3
+    '''
+    Select the best chromosome among a random subset of the population using tournament selection.
+
+    Args:
+        population (list of MagnetMesh): Current population of individuals.
+        fitnesses (list of float): Fitness scores corresponding to the population.
+        k (int): Tournament size; number of individuals to sample.
+
+    Returns:
+        np.ndarray: Deep copy of the mesh of the best individual in the tournament.
+
+    '''
     subset_idx = np.random.choice(len(population), k, replace = False)
     best = None
     best_fit = -np.inf
@@ -197,6 +251,20 @@ def TournamentSelection(population :list[magnet.MagnetMesh], #a population, list
 def UniformCrossOver(parent1,
                      parent2,
                      crossover_rate = 0.8): #default crossover rate is 0.8
+    """
+    Perform uniform crossover on two binary parent meshes to produce two offspring.
+
+    Each gene (cell) in the offspring is swapped with a 50% chance, independently for each position.
+    The crossover happens only if a random threshold is passed based on `crossover_rate`.
+
+    Args:
+        parent1 (np.ndarray): First parent binary mesh.
+        parent2 (np.ndarray): Second parent binary mesh.
+        crossover_rate (float): Probability that crossover occurs.
+
+    Returns:
+        tuple: Two offspring meshes (np.ndarray), each same shape as parents.
+    """
     if random.random() > crossover_rate:
         return copy.deepcopy(parent1), copy.deepcopy(parent2)
     child1 = copy.deepcopy(parent1)
@@ -221,6 +289,29 @@ def RunGA(population_size : int,
           init_is_random = True,
           init_input: magnet.MagnetMesh = None,
           input_mutation_rate = 0.001):
+    """
+    Run a genetic algorithm to optimize binary micromagnet meshes.
+    The polygon-based magnet shape uses the function defined below.
+
+    This function initializes a population of chromosomes, iteratively evolves them
+    using tournament selection, crossover, and mutation, and returns the best individual found.
+
+    Args:
+        population_size (int): Number of individuals in the population.
+        number_of_generations (int): Number of generations to evolve.
+        chrom_params (ChromParams): Parameters related to mesh size and simulation.
+        field_params (StrayCalcParams): Parameters for stray field calculation.
+        exp_params (ExpParams): Experimental configuration including quantum dot info.
+        crossover_rate (float): Probability of performing crossover.
+        mutation_rate (float): Mutation rate for offspring.
+        mutation_constraint (str): Mutation rule ('adj', 'boundary', or None).
+        init_is_random (bool): Whether to generate initial population randomly.
+        init_input (MagnetMesh, optional): Optional template to initialize population.
+        input_mutation_rate (float): Mutation rate applied to init_input if used.
+
+    Returns:
+        tuple: (best chromosome mesh, best fitness score, list of generation-best records)
+    """
     # 1. Create initial population
     if init_is_random == True:
         population = InitChromGen(chrom_params,
@@ -311,21 +402,28 @@ def RunGA(population_size : int,
 ########################################################
 class MultiPolygonChrom:
     """
-    A chromosome storing multiple polygons.
+    A chromosome storing multiple polygons for the polygon-based genetic algorithm.
     Each polygon is represented as a list of (x, y) vertices.
+    
+    Attributes:
+        polygons (list): List of polygons, where each polygon is a list of (x, y) vertices.
+        mesh_size (tuple): Size of the rasterization grid (nx, ny).
+        x_bound (tuple): Bounds in the x-direction in micrometers (x_min, x_max).
+        y_bound (tuple): Bounds in the y-direction in micrometers (y_min, y_max).
     """
     def __init__(self, polygons, mesh_size, x_bound, y_bound):
-        """
-        polygons: list of polygons, each is a list of (x, y) tuples.
-        mesh_size: (nx, ny) grid size for rasterization.
-        x_bound, y_bound: (x_min, x_max) and (y_min, y_max) boundaries (in micrometers).
-        """
         self.polygons = polygons
         self.mesh_size = mesh_size
         self.x_bound = x_bound
         self.y_bound = y_bound
 
     def copy(self):
+        """
+        Create a deep copy of the current chromosome.
+
+        Returns:
+            MultiPolygonChrom: A new object with duplicated data.
+        """
         return MultiPolygonChrom(copy.deepcopy(self.polygons),
                                  self.mesh_size,
                                  self.x_bound,
@@ -334,7 +432,10 @@ class MultiPolygonChrom:
     def to_shapely_polygons(self):
         """
         Convert each polygon (list of vertices) into a Shapely Polygon.
-        Vertices are sorted by angle around their centroid to reduce self-intersections.
+        #--Vertices are sorted by angle around their centroid to reduce self-intersections.--currently commented out.
+        
+        Returns:
+            list: A list of shapely.geometry.Polygon objects.
         """
         poly_list = []
         for pts in self.polygons:
@@ -353,7 +454,8 @@ class MultiPolygonChrom:
     def to_mesh(self):
         """
         Rasterize the multi-polygon into a 2D binary array of shape (nx, ny).
-        A cell is set to 1 if its center is inside any of the polygons.
+        Returns:
+            np.ndarray: A binary array of shape (nx, ny) with 1 if a cell is inside any polygon.
         """
         nx, ny = self.mesh_size
         x_min, x_max = self.x_bound
@@ -379,14 +481,14 @@ def mesh_to_polygons(mesh_coord, mesh_size, x_bound, y_bound, num_polygons):
     The polygon vertices are based on cell boundaries (not cell centers).
 
     Args:
-        mesh_coord: 2D numpy array (shape = mesh_size) with binary values (0 or 1)
-        mesh_size: tuple (nx, ny) corresponding to mesh_coord dimensions
-        x_bound: tuple (x_min, x_max) in physical units
-        y_bound: tuple (y_min, y_max) in physical units
-        num_polygons: desired number of polygons to return
+        mesh_coord (np.ndarray): 2D numpy array (shape = mesh_size) with binary values (0 or 1)
+        mesh_size (tuple): tuple (nx, ny) corresponding to mesh_coord dimensions
+        x_bound (tuple): tuple (x_min, x_max) in physical units
+        y_bound (tuple): tuple (y_min, y_max) in physical units
+        num_polygons (int): desired number of polygons to return
 
     Returns:
-        A list of polygons, each represented as an ordered list of (x, y) vertices.
+        list: A list of polygons, each represented as an ordered list of (x, y) vertices.
     """
     nx, ny = mesh_size
     # Use marching squares to extract contours (cell boundaries)
@@ -427,64 +529,17 @@ def mesh_to_polygons(mesh_coord, mesh_size, x_bound, y_bound, num_polygons):
 
     polygons = sorted(polygons, key=polygon_area, reverse=True)
     return polygons[:num_polygons]
-'''
+
 def resample_polygon_vertices(pts, num_vertices):
     """
-    Resample the vertex list of a polygon so that its overall shape is preserved 
-    while reducing or increasing the number of vertices to exactly num_vertices.
+    Resamples a polygon by the input number of vertices. locates a vertices such that the distortion is minimal.
     
-    This is done by computing the arc length of the polygon's perimeter and then sampling 
-    points at equal intervals along this perimeter.
+    Args: 
+        pts  (list): A list of polygon, with the format of [(x, y), ...]. The list should be open, i.e. first ≠ last.
+        num_vertices (int): desired number of vertices (≥ 3)
     
-    Args:
-        pts: List of (x, y) tuples representing the polygon's vertices.
-             If the polygon is closed (i.e., the first point equals the last point), the duplicate is removed.
-        num_vertices: The desired number of vertices for the output polygon.
-        
     Returns:
-        A list of (x, y) tuples representing the resampled polygon vertices.
-    """
-    # Remove the duplicate closing point if present.
-    if pts[0] == pts[-1]:
-        pts = pts[:-1]
-    pts = np.array(pts)
-    n = len(pts)
-    
-    # Compute the length of each edge (including the edge from the last to the first vertex).
-    diffs = np.diff(pts, axis=0)
-    seg_lengths = np.sqrt((diffs ** 2).sum(axis=1))
-    last_edge = np.linalg.norm(pts[0] - pts[-1])
-    seg_lengths = np.concatenate([seg_lengths, [last_edge]])
-    
-    # Total perimeter of the polygon.
-    perimeter = seg_lengths.sum()
-    
-    # Compute cumulative arc lengths along the perimeter.
-    cum_lengths = np.concatenate(([0], np.cumsum(seg_lengths)))
-    
-    # Determine target arc lengths for equally spaced vertices.
-    # The last point would coincide with the first, so we take only num_vertices points.
-    target_lengths = np.linspace(0, perimeter, num=num_vertices+1)[:-1]
-    
-    new_pts = []
-    for t in target_lengths:
-        # Find which segment the target length t falls into.
-        idx = np.searchsorted(cum_lengths, t, side='right') - 1
-        if idx >= n:
-            idx = n - 1
-        seg_length = seg_lengths[idx]
-        frac = 0 if seg_length == 0 else (t - cum_lengths[idx]) / seg_length
-        start_pt = pts[idx]
-        end_pt = pts[(idx + 1) % n]
-        # Linear interpolation to get the new point.
-        new_pt = (1 - frac) * start_pt + frac * end_pt
-        new_pts.append(tuple(new_pt))
-    return new_pts
-'''
-def resample_polygon_vertices(pts, num_vertices):
-    """
-    pts           : [(x, y), ...]  -- first ≠ last (open list)
-    num_vertices  : desired number of vertices (≥ 3)
+        list: A list of points representing a polygon (a list of polygon).
     """
     # --- helper ---
     def edge_lengths(p):
@@ -541,7 +596,7 @@ def init_multipoly_population(pop_size, mesh_size, x_bound, y_bound,
                     It should be a list of Shapely Polygon objects.
     
     Returns:
-        A list of MultiPolygonChrom objects representing the population.
+        list: A list of MultiPolygonChrom objects representing the population.
     """
     population = []
     base_polygons = None
@@ -576,22 +631,6 @@ def init_multipoly_population(pop_size, mesh_size, x_bound, y_bound,
         population.append(chrom)
     return population
 
-#def mutate_multipoly_points(chrom, mutation_rate, mutation_scale):
-#    """
-#    Shift each vertex in each polygon with probability 'mutation_rate'
-#    by a random amount up to ±mutation_scale. The new position is clamped to the bounding box.
-#    """
-#    xmin, xmax = chrom.x_bound
-#    ymin, ymax = chrom.y_bound
-#    for p_idx in range(len(chrom.polygons)):
-#        for v_idx in range(len(chrom.polygons[p_idx])):
-#            if random.random() < mutation_rate:
-#                x, y = chrom.polygons[p_idx][v_idx]
-#                dx = random.uniform(-mutation_scale, mutation_scale)
-#                dy = random.uniform(-mutation_scale, mutation_scale)
-#                x_new = max(min(x + dx, xmax), xmin)
-#                y_new = max(min(y + dy, ymax), ymin)
-#                chrom.polygons[p_idx][v_idx] = (x_new, y_new)
 
 def mutate_multipoly_points(chrom, mutation_rate, mutation_scale, max_attempts=5):
     """
@@ -605,6 +644,9 @@ def mutate_multipoly_points(chrom, mutation_rate, mutation_scale, max_attempts=5
         mutation_rate: The probability of mutating each vertex.
         mutation_scale: Maximum absolute shift applied to each vertex.
         max_attempts: Maximum number of attempts per vertex to produce a valid polygon.
+    
+    Returns:
+        None. The input chromosome is mutated in-place.
     """
     xmin, xmax = chrom.x_bound
     ymin, ymax = chrom.y_bound
@@ -636,21 +678,20 @@ def mutate_multipoly_points(chrom, mutation_rate, mutation_scale, max_attempts=5
                 # If no valid mutation was found after max_attempts, revert the change.
                 if not valid_mutation:
                     chrom.polygons[p_idx][v_idx] = original
-'''
+
 def polygon_area_intersect(polyA, polyB):
     """
-    Return the intersection area between two Shapely Polygons.
-    """
-    inter = polyA.intersection(polyB)
-    if inter.is_empty:
-        return 0.0
-    return inter.area
-'''
-def polygon_area_intersect(polyA, polyB):
-    """
-    Return the intersection area between two Shapely Polygons.
-    If GEOSException occurs, the function tries to repair polygon by 1. angle-sort 2. buffer(0)
+    Return the intersection area between two Shapely Polygons, with repair fallback.
+    
+    Attemps direct intersection; if GEOSException occurs, the function tries to repair polygon by 1. angle-sort 2. buffer(0)
     if repair fails, returns 0.0, which will be removed by selection procedure.
+    
+    Args:
+        polyA (Polygon): First polygon.
+        polyB (Polygon): Second polygon.
+
+    Returns:
+        float: Area of intersection.
     """
     def _repair(poly):
         if poly.is_valid:
@@ -700,6 +741,12 @@ def polygon_area_intersect(polyA, polyB):
 def sort_vertices_by_angle(vertices):
     """
     Sort a list of (x, y) vertices by angle around their centroid.
+    
+    Args:
+        vertices (list): List of (x, y) coordinates.
+
+    Returns:
+        list: Sorted list of vertices.
     """
     if len(vertices) < 3:
         return vertices
@@ -709,8 +756,16 @@ def sort_vertices_by_angle(vertices):
 
 def blend_polygon_vertices(ptsA, ptsB, alpha=0.5):
     """
-    Blend two lists of vertices by taking the weighted average of each corresponding vertex.
-    If lengths differ, blend up to the minimum length.
+    Blend two polygons' vertex lists via linear interpolation.
+    Each vertex is blended with weight `alpha` from ptsA and (1-alpha) from ptsB.
+    
+    Args:
+        ptsA (list): First list of (x, y) vertices.
+        ptsB (list): Second list of (x, y) vertices.
+        alpha (float): Blending weight.
+
+    Returns:
+        list: List of blended (x, y) vertices.
     """
     n = min(len(ptsA), len(ptsB))
     blended = []
@@ -724,9 +779,19 @@ def blend_polygon_vertices(ptsA, ptsB, alpha=0.5):
 
 def crossover_multipoly_blending(parent1, parent2, crossover_rate=0.8, alpha=0.5):
     """
-    Perform overlap-based blending crossover on MultiPolygonChrom objects.
-    For each polygon in parent1, find the polygon in parent2 with maximum overlap area
-    and blend their vertices. Unmatched polygons are kept unchanged.
+    Perform polygon-based crossover using geometric blending of overlapping regions.
+
+    For each polygon in `parent1`, find the most overlapping polygon in `parent2`
+    and generate blended offspring polygons. Unmatched polygons are copied directly.
+
+    Args:
+        parent1 (MultiPolygonChrom): First parent chromosome.
+        parent2 (MultiPolygonChrom): Second parent chromosome.
+        crossover_rate (float): Probability of performing crossover.
+        alpha (float): Weighting factor for blending polygon vertices.
+
+    Returns:
+        tuple: Two child chromosomes (MultiPolygonChrom).
     """
     if random.random() > crossover_rate:
         return parent1.copy(), parent2.copy()
@@ -777,11 +842,25 @@ def fit_eval_multipoly(chrom,            # <-- renamed for clarity
                        min_thresh_T=0.050, 
                        margin=0.020):
     """
-    Same signature as the old fit_eval_multipoly but:
-      • runs the MuMax3 magnet-static simulation once (SystemGen)
-      • calls the C++ stray-field kernel only on a tiny 3×3 patch
-        centred on each (qd_x, qd_y) in exp_params.qd_positions
-      • accumulates Q over the requested dots and returns the total.
+    Evaluate the fitness of a MultiPolygonChrom chromosome using local field gradients.
+
+    For each quantum dot position, calculates local stray field gradients and
+    derives quality factor Q. Penalizes inconsistent magnetic field magnitudes across QDs.
+    
+    To be specific, the penalty is introduced to allow the minimal addressibility, which is set by min_thresh_T and margin.
+    The unit of both are Tesla.
+
+    Args:
+        chrom (MultiPolygonChrom): Chromosome encoding polygon geometry.
+        chrom_params (ChromParams): Mesh and MuMax3 parameters.
+        field_params (StrayCalcParams): Field range and granularity.
+        exp_params (ExpParams): QD positions and noise parameters.
+        penalty_weight (float): Weight of the penalty term.
+        min_thresh_T (float): Minimum field norm to trigger penalty (Tesla).
+        margin (float): Tolerance margin in Tesla.
+
+    Returns:
+        float: Fitness score (Q value with penalties).
     """
     # — 1. build the micromagnet once —
     mesh_arr = chrom.to_mesh()
@@ -793,11 +872,11 @@ def fit_eval_multipoly(chrom,            # <-- renamed for clarity
 
     try:
         mm.SystemGen(chrom_params.z_gran,
-                     chrom_params.n_cpu)            # << MuMax3 run (unchanged)
+                     chrom_params.n_cpu)           
 
         _time = time.time()
         # --- geometry of the local 3×3 stencil -----------------------------
-        # We keep the same spatial step that field_params.gran implied
+        # keep the same spatial step that field_params.gran implied
         full_dx = (field_params.field_x_range[1] - field_params.field_x_range[0]) \
                   / (field_params.gran[0] - 1)
         full_dy = (field_params.field_y_range[1] - field_params.field_y_range[0]) \
@@ -884,9 +963,24 @@ def fit_eval_multipoly_robust(chrom: MultiPolygonChrom,
                                min_thresh_T=0.050, 
                                margin=0.020):
     """
-    Evaluates the average fitness of a polygon under random fabrication variation.
-    `blur_sigma` sets the stddev (in µm) of the offset applied to each perturbation.
-    `num_samples` controls how many perturbed versions are simulated.
+    Robust fitness evaluation with fabrication-induced perturbation.
+
+    Applies Gaussian offsets (buffering) to each polygon and evaluates
+    average fitness across perturbed samples to simulate fabrication variation.
+
+    Args:
+        chrom (MultiPolygonChrom): Chromosome to evaluate.
+        chrom_params (ChromParams): Parameters for simulation.
+        field_params (StrayCalcParams): Grid and depth settings.
+        exp_params (ExpParams): Quantum dot configuration.
+        num_samples (int): Number of perturbed samples to evaluate.
+        blur_sigma (float): Standard deviation of the shape deformation (µm).
+        penalty_weight (float): Field uniformity penalty weight.
+        min_thresh_T (float): Threshold for field strength.
+        margin (float): Margin for penalty decay.
+
+    Returns:
+        float: Average fitness over perturbations.
     """
     _time = time.time()
     total_fitness = 0.0
@@ -940,67 +1034,6 @@ def fit_eval_multipoly_robust(chrom: MultiPolygonChrom,
     print('Individual chromosome fitness evaluation finished:', datetime.timedelta(seconds=time.time() - _time))
     return total_fitness / num_samples
 
-'''
-#Fitness Evaulation, FULL
-def fit_eval_multipoly(chrom, chrom_params, field_params, exp_params):
-    """
-    Rasterize the MultiPolygonChrom into a mesh, wrap it as a MagnetMesh,
-    then create a MeshedMicroMagnet and run the existing FitEval logic.
-    """
-    mesh_arr = chrom.to_mesh()
-    # Wrap the mesh_arr into a MagnetMesh object
-    mmesh = magnet.MagnetMesh(mesh_arr, chrom_params.mesh_x_list, chrom_params.mesh_y_list)
-    mm = magnet.MeshedMicroMagnet(mmesh, **chrom_params.MmSimParams.simulation_parameter)
-    try:
-        mm.SystemGen(chrom_params.z_gran, chrom_params.n_cpu)
-        _time = time.time()
-        for comp in [0, 1, 2]:
-            mm.CalcStray(field_params.field_x_range,
-                         field_params.field_y_range,
-                         field_params.gran,
-                         field_params.qunatum_dot_pos_z,
-                         component=comp,
-                         n_cpu=chrom_params.n_cpu)
-        Field_trace = copy.deepcopy(mm.field_trace)
-        print('Total time elapsed for a Stray field calculation:', datetime.timedelta(seconds=time.time() - _time))
-        _time = time.time()
-        dx = (mm.field_x[2] - mm.field_x[1])
-        dy = (mm.field_y[2] - mm.field_y[1])
-        T2_star_trace = np.zeros((Field_trace.shape[0]-1, Field_trace.shape[1]-1))
-        Q_trace = np.zeros_like(T2_star_trace)
-        h_const = 4.13e-15
-        guB_const = 2 * 57.8e-6
-        for i in range(Field_trace.shape[0]-1):
-            for j in range(Field_trace.shape[1]-1):
-                dB = np.sqrt(
-                    ((Field_trace[i+1, j, 1] - Field_trace[i, j, 1]) / dx)**2 +
-                    ((Field_trace[i, j+1, 1] - Field_trace[i, j, 1]) / dy)**2
-                )
-                if dB > 1e-12:
-                    T2_star = h_const * 0.83255461115 / np.pi / guB_const / dB / exp_params.sigma_pos
-                else:
-                    T2_star = 1e9
-                dBg = np.sqrt(
-                    ((Field_trace[i, j+1, 0] - Field_trace[i, j, 0]) / dy)**2 +
-                    ((Field_trace[i, j+1, 2] - Field_trace[i, j, 2]) / dy)**2
-                )
-                Q_val = dBg * T2_star
-                T2_star_trace[i, j] = T2_star
-                Q_trace[i, j] = Q_val
-        def IdxFind(arr, val):
-            return np.argmin(np.abs(arr - val))
-        Q_total = 0
-        for (qd_x, qd_y) in exp_params.qd_positions:
-            idx_x = IdxFind(mm.field_x, qd_x)
-            idx_y = IdxFind(mm.field_y, qd_y)
-            Q_total += Q_trace[idx_x, idx_y]
-        print('Total time elapsed for a fitness evaluation:', datetime.timedelta(seconds=time.time() - _time))
-        return Q_total
-    except Exception as e:
-        print("Simulation failed in fit_eval_multipoly:", e)
-        return -1e9
-'''
-
 # Tournament Selection
 def tournament_selection_multipoly(population, fitnesses, k=3):
     """
@@ -1039,12 +1072,35 @@ def RunGA_MultiPolygonBlendingPoints(population_size,
                                      min_thresh_T=0.050, 
                                      margin=0.020):
     """
-    GA that evolves MultiPolygonChrom chromosomes using overlap-based blending crossover.
-    It initializes the population (either random or from an existing MagnetMesh),
-    evaluates fitness via OOMMF simulation, performs tournament selection,
-    applies blending crossover (on polygons with maximum overlap), and then mutates the vertices.
-    
-    Returns: (best_chromosome, best_fitness, history)
+    Genetic Algorithm for polygon-based chromosome evolution.
+
+    Uses crossover via geometric blending of overlapping polygons,
+    mutation via vertex jittering, and optional robustness to fabrication.
+
+    Args:
+        population_size (int): Size of the chromosome pool.
+        number_of_generations (int): Number of GA iterations.
+        chrom_params (ChromParams): Simulation settings.
+        field_params (StrayCalcParams): Field grid and range.
+        exp_params (ExpParams): Experimental QD configuration.
+        consider_fab_blur (bool): Whether to simulate CD variation.
+        num_samples (int): Perturbed samples per chromosome.
+        blur_sigma (float): Fabrication blur standard deviation.
+        num_polygons (int): Number of polygons per individual.
+        num_vertices (int): Number of vertices per polygon.
+        init_is_random (bool): Whether to generate population from scratch.
+        init_input: Template MagnetMesh or polygon list.
+        crossover_rate (float): Probability of crossover.
+        alpha (float): Blending strength in crossover.
+        mutation_rate (float): Per-point mutation probability.
+        mutation_scale (float): Max vertex perturbation (µm).
+        k_tournament (int): Tournament size.
+        penalty_weight (float): Field uniformity penalty weight.
+        min_thresh_T (float): Penalty activation threshold.
+        margin (float): Soft penalty decay.
+
+    Returns:
+        tuple: (best chromosome, best fitness, list of (gen, best chrom, fit)).
     """
     _timeGA = time.time()
     mesh_size = chrom_params.mesh_size
