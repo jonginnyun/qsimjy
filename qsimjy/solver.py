@@ -48,9 +48,13 @@ class Schrodinger2D:
         potential (2D array): Potential on the solution grid.
         eigenvalues (1D array): Eigenvalues from solving the Schrödinger equation.
         eigenstates (2D array): Corresponding eigenstates.
+        qd_device (Quantum_dot_device): A `Quantum_dot_device` object defined in `quantumdot` module. Default is None.
     """
 
-    def __init__(self, x_list_solve, y_list_solve):
+    def __init__(self, 
+                 x_list_solve, 
+                 y_list_solve, 
+                 quantum_dot = None):
         print("Assuming Dirichlet boundary conditions with boundary value zero.")
         if len(x_list_solve) != len(y_list_solve):
             print(
@@ -62,10 +66,30 @@ class Schrodinger2D:
 
         self.x_list_solve = x_list_solve
         self.y_list_solve = y_list_solve
+        self.qd_device = quantum_dot
         self.potential = None
         self.eigenvalues = None
         self.eigenstates = None
 
+    def set_potential_by_quantum_dot(self):
+        """
+        Set the potential on the solution grid by interpolating the given potential trace.
+        """
+        if self.qd_device == None:
+            Exception("`qd_device` is empty. Assign a quantum_dot_device")
+        # Convert potential to eV scale (if necessary)
+        potential_trace = self.qd_device.potential_value
+        v_values = potential_trace / (11 * 4 * np.pi)  # Adjust conversion factor as needed
+
+        # Create interpolator
+        interp_spline = interpolate.RectBivariateSpline(
+            self.qd_device.potential_xlist, self.qd_device.potential_ylist, v_values
+        )
+
+        # Evaluate interpolated potential on the solution grid
+        X, Y = np.meshgrid(self.x_list_solve, self.y_list_solve)
+        self.potential = interp_spline.ev(Y.ravel(), X.ravel()).reshape(X.shape)
+        
     def set_potential(self, x_list_potential, y_list_potential, potential_trace):
         """
         Set the potential on the solution grid by interpolating the given potential trace.
@@ -121,7 +145,7 @@ class Schrodinger2D:
         T = sparse.kronsum(D_y, D_x, format="csr")
 
         # Potential energy operator
-        V_flat = self.potential.ravel()
+        V_flat = -self.potential.ravel()
         U = sparse.diags(V_flat, format="csr")
 
         # Hamiltonian

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import time
 import datetime
@@ -8,16 +10,67 @@ import shapely as shp
 import ezdxf
 import _cxx_potcalc
 from shapely.geometry import Polygon, MultiPolygon, Point
+from shapely.ops import unary_union
 from shapely.plotting import plot_polygon, plot_points
+from shapely.strtree import STRtree
+from shapely.ops import unary_union
 from multiprocess import Pool
 
 """
 CAD gate parsing and electrostatic simulation utilities.
 Supports DXF file format and maps gate layers to physical potential contributions.
 """
+def merge_overlapping_gate_patterns(gate_set: Gate_set, 
+                                    name_list: List[string] = None): 
+    """
+    Merge Gate_pattern which overlaps. Returns a new list of Gate_pattern objects where:
+    1. Overlapping gate patterns are unioned.
+    2. For each overlapping gate group, the first gate's name is used as the merged Gate_pattern object.
+    
+    Args:
+        gate_set (Gate_set): Gate_set object containing Gate_patterns.
+        name_list (List[string]): A list of gate_set names to be merged.
+        
+    Returns:
+        merged_gate_set (Gate_set]): Gate_set object of Gate_patterns after the merging of overlapping gates is done.
+    """
+    if name_list == None:
+        Exception("input name_list")
+    gate_patterns = gate_set.gate_list
+    polys = [gp.gate_polygon for gp in gate_patterns if gp.name in name_list]
+    gps = [gp for gp in gate_patterns if gp.name in name_list]
+    others = [gp for gp in gate_patterns if gp.name not in name_list]
+    tree = STRtree(polys) #founds polygons that could possibly overlap with a given gate_polygon
+    used = [False] * len(polys)
+    merged_patterns: List[Gate_pattern] = []
+    
+    for i, poly in enumerate(polys):
+        if used[i]:
+            continue
+        candidates = [j for j in tree.query(poly) if not used[j]]
+        group_idxs = [j for j in candidates if poly.intersects(polys[j])]
+        for j in group_idxs:
+            used[j] = True
+        unioned  = unary_union([poly]+[polys[j] for j in group_idxs]).buffer(0)
+        merged_gate = Gate_pattern()
+        merged_gate.set_polygon(unioned)
+        merged_gate.set_name(gps[i].name)
+        merged_patterns.append(merged_gate)
+    # for i, gate in enumerate(gate_patterns):
+    #     if used[i]:
+    #         continue
+    #     merged_patterns.append(gate)
+    merged_patterns += others
+    merged_gate_set = Gate_set()
+    merged_gate_set.add_gates(merged_patterns)
+    return merged_gate_set
+        
 
-
-def dxf_exporter(file_dir: str, offset=0.01):
+    
+def dxf_exporter(file_dir: str, 
+                 offset=0.01,
+                 cap_style: {'round','mitre','bevel'}  = 'round',
+                 join_style: {'round','mitre','bevel'} = 'round'):
     """
     Import a DXF file and convert each LWPOLYLINE entity into a Gate_pattern object.
     Each Gate_pattern is added to a Gate_set.
@@ -35,7 +88,7 @@ def dxf_exporter(file_dir: str, offset=0.01):
         vertices = [(vertex[0], vertex[1]) for vertex in entity.vertices()]
         if len(vertices) >= 4:
             g = Gate_pattern()
-            g.add_points(vertices, offset)
+            g.add_points(vertices, offset, cap_style, join_style)
             g.set_name(entity.dxf.layer)
             polygon_list.append(g)
     gate_set = Gate_set()
@@ -125,7 +178,11 @@ class Gate_pattern:
                 "Points to be added should be a list or np.array with the form of [x, y]"
             )
 
-    def add_points(self, point_tuple_list, offset=0) -> None:
+    def add_points(self, 
+                   point_tuple_list, 
+                   offset=0, 
+                   cap_style = None,
+                   join_style = None) -> None:
         """
         Add multiple points to the gate pattern.
 
@@ -145,7 +202,9 @@ class Gate_pattern:
         polygon_points = list(zip(self.point_list_x, self.point_list_y))
         self.gate_polygon = shp.Polygon(polygon_points)
         if offset != 0:
-            self.gate_polygon = self.gate_polygon.buffer(offset)
+            self.gate_polygon = self.gate_polygon.buffer(offset, 
+                                                         cap_style = cap_style,
+                                                         join_style = join_style)
 
     def set_polygon(self, polygon: Polygon):
         """
