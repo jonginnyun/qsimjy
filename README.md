@@ -68,13 +68,7 @@ energies, wavefuncs = solver.solve()
 
 ## Tutorials & Documentation
 
-Interactive Jupyter‑Book with step‑by‑step notebooks:
-
-1. **Approximate Potential Calculation**  
-2. **Micromagnet Simulation with MuMax3**  
-3. **Genetic Optimisation for Micromagnet Design**
-
-See the `docs/` folder or https://your‑username.github.io/qsimjy for rendered pages.
+Currently, tutorials or documentation are not provided due to a confidentiality issue.
 
 ---
 
